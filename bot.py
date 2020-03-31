@@ -45,10 +45,14 @@ index = init_algolia()
 
 def reply(status):
     ''' Takes a status object and replies '''
+    logging.info(f'status{status.in_reply_to_screen_name}')
+    logging.info(f'{status}')
     try:
         original_tweet = api.get_status(status.in_reply_to_status_id)
+        logging.info('Reached here')
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
+        logging.info(f'text - {text}')
         # search our index
         SearchResults = index.search(text)
         if SearchResults['nbHits'] > 0:
@@ -58,12 +62,12 @@ def reply(status):
                 f'This has been debunked, {_reason} '
                 f'read more at {_link}'
             ])
-            import pdb;pdb.set_trace()
-            reply = api.update_status(reply_string, in_reply_to_status_id=status.id)
+            reply = api.update_status(reply_string, in_reply_to_status_id=original_tweet.id)
             logging.info(f'Replied, Reply ID: {reply.id}, Status ID: {status.id}')
         else:
             api.update_status(
-                f'@{status.in_reply_to_screen_name} No matching articles found in our search')
+                f'@{status.in_reply_to_screen_name} No matching article found in our search', in_reply_to_status_id=original_tweet.id)
+            logging.error(f'No match {text}')
     except Exception as e:
         logging.error(traceback.format_exc())
 
@@ -74,6 +78,7 @@ class track_streams(tweepy.StreamListener):
         logging.info(f'Invoked: {status.text}, id: {status.id}')
         # Filter out if anyone retweets a sachbolo reply - we don't want to recursively enter a loop
         if not any([status.is_quote_status, hasattr(status, 'retweeted_status')]):
+            logging.info('trying to reply')
             reply(status)
         else:
             logging.error('Did not reply')
