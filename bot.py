@@ -9,6 +9,8 @@ from urllib3.exceptions import ReadTimeoutError
 
 from algoliasearch.search_client import SearchClient
 import tweepy
+from textblob  import TextBlob
+
 
 with open('tokens.json') as f:
     tokens = json.load(f)
@@ -52,6 +54,8 @@ def reply(status):
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
         logging.info(f'text - {text}')
+        blob = TextBlob(text)
+        text = ' '.join(list(blob.noun_phrases))
         # search our index
         SearchResults = index.search(text)
         if SearchResults['nbHits'] > 0:
