@@ -13,7 +13,7 @@ with open('tokens.json') as f:
     tokens = json.load(f)
 
 logging.basicConfig(filename=f'{time.ctime()}bot.log', filemode='w',
-                    format='%(process)d - %(asctime)s - %(levelname)s - %(message)s', 
+                    format='%(process)d - %(asctime)s - %(levelname)s - %(message)s',
                     level=os.environ.get("LOGLEVEL", "INFO"))
 
 
@@ -24,9 +24,11 @@ def get_api():
     logging.info('auth token set')
     return tweepy.API(auth)
 
+
 def init_algolia():
     ''' init the algolia index '''
-    client = SearchClient.create(tokens['algolia_appid'], tokens['algolia_adminAPI'])
+    client = SearchClient.create(
+        tokens['algolia_appid'], tokens['algolia_adminAPI'])
     logging.info(client.list_indices())
     index = client.init_index('CoronaFactChecks')
     index.set_settings({
@@ -34,9 +36,11 @@ def init_algolia():
     })
     return index
 
+
 api = get_api()
 logging.info('global api object created')
 index = init_algolia()
+
 
 def reply(status):
     ''' Takes a status object and replies '''
@@ -45,16 +49,17 @@ def reply(status):
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
         # search our index
-        try: 
-            results = index.search(text)
-        except Exception as e:
-            logging.error(e)
+        results = index.search(text)
         if results['nbHits'] > 0:
             best_result = results['hits'][0]
-            api.update_status(f'@{status.in_reply_to_screen_name} This has been debunked, {best_result["fact_checked_reason"]} read more at {best_result["link"]} ')
+            api.update_status(
+                f'@{status.in_reply_to_screen_name} This has been debunked, {best_result["fact_checked_reason"]} read more at {best_result["link"]} ')
             logging.info(f'Replied, {status.id}')
         else:
-            api.update_status(f'@{status.in_reply_to_screen_name} No matching articles found in our search')
+            api.update_status(
+                f'@{status.in_reply_to_screen_name} No matching articles found in our search')
+    except Exception as e:
+        logging.error(e)
 
 
 class track_streams(tweepy.StreamListener):
