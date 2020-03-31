@@ -6,8 +6,8 @@ import logging
 import requests
 from urllib3.exceptions import ReadTimeoutError
 
+from algoliasearch.search_client import SearchClient
 import tweepy
-from bs4 import BeautifulSoup
 
 with open('tokens.json') as f:
     tokens = json.load(f)
@@ -24,10 +24,19 @@ def get_api():
     logging.info('auth token set')
     return tweepy.API(auth)
 
+def init_algolia():
+    ''' init the algolia index '''
+    client = SearchClient.create(tokens['algolia_appid'], tokens['algolia_adminAPI'])
+    logging.info(client.list_indices())
+    index = client.init_index('CoronaFactChecks')
+    index.set_settings({
+        'removeStopWords': True
+    })
+    return index
 
 api = get_api()
 logging.info('global api object created')
-
+index = init_algolia()
 
 def reply(status):
     ''' Takes a status object and replies '''
@@ -35,26 +44,17 @@ def reply(status):
         original_tweet = api.get_status(status.in_reply_to_status_id)
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
-        r = requests.get(f'https://www.altnews.in/?s={text}')
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.content, 'lxml').find_all('article')
-            if soup:
-                urls = soup[0].find_all('a')
-                if urls:
-                    url, title = urls[0]['href'], urls[0]['title']
-                    api.update_status(
-                        f'@{status.in_reply_to_screen_name} FactCheck {title}, {url}', original_tweet.id)
-                    logging.info(f'Succes reply made {status.id}')
-                else:
-                    api.update_status(
-                        f'@{status.in_reply_to_screen_name} No Articles Found', original_tweet.id)
-                    logging.error(f'No article found {status.id}')
-            else:
-                logging.error(f'No soup object {status.id}')
+        # search our index
+        try: 
+            results = index.search(text)
+        except Exception as e:
+            logging.error(e)
+        if results['nbHits'] > 0:
+            best_result = results['hits'][0]
+            api.update_status(f'@{status.in_reply_to_screen_name} This has been debunked, {best_result["fact_checked_reason"]} read more at {best_result["link"]} ')
+            logging.info(f'Replied, {status.id}')
         else:
-            logging.error(f'Alt News Request Broke {status.id}')
-    except Exception as e:
-        logging.error(f'Something Broke {status.id}, {e}')
+            api.update_status(f'@{status.in_reply_to_screen_name} No matching articles found in our search')
 
 
 class track_streams(tweepy.StreamListener):
