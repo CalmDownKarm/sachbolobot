@@ -49,7 +49,6 @@ def reply(status):
     logging.info(f'{status}')
     try:
         original_tweet = api.get_status(status.in_reply_to_status_id)
-        logging.info('Reached here')
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
         logging.info(f'text - {text}')
