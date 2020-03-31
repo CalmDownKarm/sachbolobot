@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import requests
+import traceback
 from urllib3.exceptions import ReadTimeoutError
 
 from algoliasearch.search_client import SearchClient
@@ -49,17 +50,22 @@ def reply(status):
         text = re.sub(r"(?:\@|https?\://)\S+", "",
                       original_tweet.text)  # Remove user mentions
         # search our index
-        results = index.search(text)
-        if results['nbHits'] > 0:
-            best_result = results['hits'][0]
-            api.update_status(
-                f'@{status.in_reply_to_screen_name} This has been debunked, {best_result["fact_checked_reason"]} read more at {best_result["link"]} ')
-            logging.info(f'Replied, {status.id}')
+        SearchResults = index.search(text)
+        if SearchResults['nbHits'] > 0:
+            _reason, _link = SearchResults['hits'][0]['fact_checked_reason'], SearchResults['hits'][0]['link']
+            reply_string = ' '.join([
+                f'@{status.in_reply_to_screen_name} ',
+                f'This has been debunked, {_reason} '
+                f'read more at {_link}'
+            ])
+            import pdb;pdb.set_trace()
+            reply = api.update_status(reply_string, in_reply_to_status_id=status.id)
+            logging.info(f'Replied, Reply ID: {reply.id}, Status ID: {status.id}')
         else:
             api.update_status(
                 f'@{status.in_reply_to_screen_name} No matching articles found in our search')
     except Exception as e:
-        logging.error(e)
+        logging.error(traceback.format_exc())
 
 
 class track_streams(tweepy.StreamListener):
@@ -69,6 +75,8 @@ class track_streams(tweepy.StreamListener):
         # Filter out if anyone retweets a sachbolo reply - we don't want to recursively enter a loop
         if not any([status.is_quote_status, hasattr(status, 'retweeted_status')]):
             reply(status)
+        else:
+            logging.error('Did not reply')
 
 
 def start_stream(stream, **kwargs):
